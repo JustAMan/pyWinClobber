@@ -46,7 +46,7 @@ MSIPATCHSTATE_ALL = 15
 
 ERROR_NO_MORE_ITEMS = 0x103
 
-class PatchInfo(object):
+class MsiPatchInfo(object):
     def __init__(self, patchGuid, productGuid, dwContext, userSid):
         self.__patchGuid = patchGuid
         self.__productGuid = productGuid
@@ -56,7 +56,7 @@ class PatchInfo(object):
     def __str__(self):
         return 'Patch: %s, product: %s (by %s)' % (self.__patchGuid, self.__productGuid,
                                                    self.__userSid or '<system>')
-    
+
     def __getattr__(self, name):
         buffSize = DWORD(10)
         userSid = self.__userSid if self.__dwContext != MSIINSTALLCONTEXT_MACHINE else None
@@ -72,8 +72,8 @@ class PatchInfo(object):
             raise AttributeError('Cannot get %s property for %s: error %s' % \
                                  (name, self, result))
         return buff.value
-    
-def allPatches():
+
+def getAllPatches():
     index = 0
     # Allocate big enough buffer to keep GUID plus null terminator
     patchGuid = ctypes.create_string_buffer(len('{01234567-89AB-CDEF-0123-456789ABCDEF}') + 1)
@@ -97,13 +97,12 @@ def allPatches():
                                       ctypes.byref(userSidSize))
         if result == 0:
             index += 1
-            yield PatchInfo(patchGuid.value, productGuid.value, dwContext.value,
+            yield MsiPatchInfo(patchGuid.value, productGuid.value, dwContext.value,
                             userSid.value if userSidSize else '')
         else:
             raise Exception('Cannot get needed szTargetUserSid size: error = %s' % result)
-        
+
 if __name__ == '__main__':
     elevateAdminRights()
-    for patchInfo in allPatches():
+    for patchInfo in getAllPatches():
         print '%s: package = %s' % (str(patchInfo), patchInfo.LocalPackage)
-    
