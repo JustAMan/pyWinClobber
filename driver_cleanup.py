@@ -115,10 +115,15 @@ def deleteDriver(name):
     try:
         subprocess.check_output(['pnputil', '-d', name])
     except subprocess.CalledProcessError, err:
-        print 'fail: pnputil return code = %s, output:' % err.returncode
-        print err.output
+        if 'One or more devices are presently installed using the specified INF' in err.output:
+            print 'fail: staged driver probably in use'
+        else:
+            print 'fail: unexpected pnputil return code = %s, output:' % err.returncode
+            print err.output
+        return False
     else:
         print 'done'
+        return True
 
 def getFolderSize(path):
     '''
@@ -207,18 +212,24 @@ def main():
     
     print 'Drivers (sorted by size):'
     driverSize.sort(reverse=True, key=lambda (oemName, size): size)
-    dups = []
+    dups, dupSize = [], 0
     for oemName, size in driverSize:
         if oemName in oemDups:
-            dups.append(oemName)
+            dups.append((oemName, size))
+            dupSize += size
         print '%s: %.2fM%s' % (drivers[oemName], size / (1024.0 * 1024),
                 ' (duplicate of %s)' % oemDups[oemName] if oemName in oemDups else '')
 
     if dups:
-        answer = raw_input('Duplicates found. Delete? [y(es)/n(o)] ').lower()
+        answer = raw_input('Possible duplicates found (taking %.2fM). Delete? [y(es)/n(o)] ' % \
+                           (dupSize / (1024.0 * 1024))).lower()
+        cleanedSize = 0
         if answer in ('y', 'yes'):
-            for dup in dups:
-                deleteDriver(dup)
+            for dup, size in dups:
+                if deleteDriver(dup):
+                    cleanedSize += size
+            print 'Was able to clean up %.2fM out of %.2fM expected' % \
+                    (cleanedSize / (1024.0 * 1024), dupSize / (1024.0 * 1024))
         else:
             print 'Cancelled by user'
 
