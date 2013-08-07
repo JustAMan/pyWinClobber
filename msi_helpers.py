@@ -38,6 +38,14 @@ MsiGetPatchInfoEx = ctypes.windll.msi.MsiGetPatchInfoExA
 MsiGetPatchInfoEx.argtypes = (c_char_p, c_char_p, c_char_p, DWORD, c_char_p, c_char_p, LPDWORD)
 MsiGetPatchInfoEx.restype = c_uint
 
+MsiEnumProducts = ctypes.windll.msi.MsiEnumProductsA
+MsiEnumProducts.argtypes = (DWORD, c_char_p)
+MsiEnumProducts.restype = c_uint
+
+MsiGetProductInfo = ctypes.windll.msi.MsiGetProductInfoA
+MsiGetProductInfo.argtypes = (c_char_p, c_char_p, c_char_p, LPDWORD)
+MsiGetProductInfo.restype = c_uint
+
 # from MSDN
 ALL_USERS = 's-1-1-0'
 MSIINSTALLCONTEXT_ALL = 1 | 2 | 4
@@ -45,6 +53,8 @@ MSIINSTALLCONTEXT_MACHINE = 4
 MSIPATCHSTATE_ALL = 15
 
 ERROR_NO_MORE_ITEMS = 0x103
+
+GUID_BUFFER_LEN = len('{01234567-89AB-CDEF-0123-456789ABCDEF}') + 1
 
 class MsiPatchInfo(object):
     def __init__(self, patchGuid, productGuid, dwContext, userSid):
@@ -73,11 +83,37 @@ class MsiPatchInfo(object):
                                  (name, self, result))
         return buff.value
 
+class MsiProduct(object):
+    def __init__(self, productGuid):
+        self.__productGuid = productGuid
+
+    def __getattr__(self, name):
+        buffSize = DWORD(10)
+        result = MsiGetProductInfo(self.__productGuid, str(name), None, ctypes.byref(buffSize))
+        if result != 0:
+            raise AttributeError('Product %s has no %s attribute (error: %s)' % \
+                                 (self.__productGuid, name, result))
+
+        buffSize = DWORD(buffSize.value + 1)
+        resultBuffer = ctypes.create_string_buffer(buffSize.value)
+        result = MsiGetProductInfo(self.__productGuid, str(name), resultBuffer,
+                                   ctypes.byref(buffSize))
+        if result != 0:
+            raise AttributeError('Product %s has no %s attribute (error: %s)' % \
+                                 (self.__productGuid, name, result))
+        return resultBuffer.value
+
+    def __str__(self):
+        return 'Product: %s' % self.__productGuid
+
 def getAllPatches():
+    '''
+    Enumerates over all known MSI patches on the machine
+    '''
     index = 0
     # Allocate big enough buffer to keep GUID plus null terminator
-    patchGuid = ctypes.create_string_buffer(len('{01234567-89AB-CDEF-0123-456789ABCDEF}') + 1)
-    productGuid = ctypes.create_string_buffer(len('{01234567-89AB-CDEF-0123-456789ABCDEF}') + 1)
+    patchGuid = ctypes.create_string_buffer(GUID_BUFFER_LEN)
+    productGuid = ctypes.create_string_buffer(GUID_BUFFER_LEN)
     userSidSize = DWORD(10)
     dwContext = DWORD(111)
     while True:
@@ -102,7 +138,20 @@ def getAllPatches():
         else:
             raise Exception('Cannot get needed szTargetUserSid size: error = %s' % result)
 
+def getAllProducts():
+    """
+    Return all products known to MSI on the machine.
+    """
+    index = 0
+    # Allocate big enough buffer to keep GUID plus null terminator
+    productGuid = ctypes.create_string_buffer(GUID_BUFFER_LEN)
+    while 0 == MsiEnumProducts(index, productGuid):
+        index += 1
+        yield MsiProduct(productGuid.value)
+
 if __name__ == '__main__':
     elevateAdminRights()
     for patchInfo in getAllPatches():
-        print '%s: package = %s' % (str(patchInfo), patchInfo.LocalPackage)
+        print '%s: package = %s' % (patchInfo, patchInfo.LocalPackage)
+    for productInfo in getAllProducts():
+        print '%s' % productInfo
