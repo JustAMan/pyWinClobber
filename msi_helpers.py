@@ -63,6 +63,9 @@ class MsiPatchInfo(object):
         self.__userSid = userSid
         self.__dwContext = dwContext
 
+    def getPatchGuid(self):
+        return self.__patchGuid
+
     def __str__(self):
         return 'Patch: %s, product: %s (by %s)' % (self.__patchGuid, self.__productGuid,
                                                    self.__userSid or '<system>')
@@ -104,7 +107,7 @@ class MsiProduct(object):
         return resultBuffer.value
 
     def __str__(self):
-        return 'Product: %s' % self.__productGuid
+        return 'Product: %s (%s)' % (self.ProductName, self.__productGuid)
 
 def getAllPatches():
     '''
@@ -150,8 +153,5 @@ def getAllProducts():
         yield MsiProduct(productGuid.value)
 
 if __name__ == '__main__':
-    elevateAdminRights()
-    for patchInfo in getAllPatches():
-        print '%s: package = %s' % (patchInfo, patchInfo.LocalPackage)
-    for productInfo in getAllProducts():
-        print '%s' % productInfo
+    sys.stderr.write('This is helper module not intended for standalone run\n')
+    sys.exit(1)

@@ -87,6 +87,7 @@ WaitForSingleObject.argtypes = (HANDLE, DWORD)
 WaitForSingleObject.restype = DWORD
 
 SW_HIDE = 0
+SW_SHOW = 5
 SEE_MASK_NOCLOSEPROCESS = 0x00000040
 INFINITE = -1
 
@@ -144,7 +145,14 @@ def elevateAdminRights(waitAndClose=True, reattachConsole=True):
                                          [ELEVATE_MARKER])
         executeInfo = ShellExecuteInfo(fMask=SEE_MASK_NOCLOSEPROCESS, hwnd=None, lpVerb='runas',
                                        lpFile=sys.executable, lpParameters=params,
-                                       lpDirectory=None, nShow=SW_HIDE)
+                                       lpDirectory=None,
+                                       nShow=SW_HIDE if reattachConsole else SW_SHOW)
+        if reattachConsole and not all(stream.isatty() for stream in (sys.stdin, sys.stdout,
+                                                                      sys.stderr)):
+            #TODO: some streams were redirected, we need to manually work them
+            # currently just raise an exception
+            raise NotImplementedError("win32elevate doesn't support elevating scripts with "
+                                      "redirected input or output")
 
         if not ShellExecuteEx(ctypes.byref(executeInfo)):
             raise ctypes.WinError()

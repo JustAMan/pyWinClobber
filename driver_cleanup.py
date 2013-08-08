@@ -27,6 +27,7 @@ For more information see "pnputil.exe -?"
 '''
 
 from win32elevate import elevateAdminRights
+from common_helpers import MB
 import subprocess
 import re
 import os
@@ -217,19 +218,18 @@ def main():
         if oemName in oemDups:
             dups.append((oemName, size))
             dupSize += size
-        print '%s: %.2fM%s' % (drivers[oemName], size / (1024.0 * 1024),
+        print '%s: %s%s' % (drivers[oemName], MB(size),
                 ' (duplicate of %s)' % oemDups[oemName] if oemName in oemDups else '')
 
     if dups:
-        answer = raw_input('Possible duplicates found (taking %.2fM). Delete? [y(es)/n(o)] ' % \
-                           (dupSize / (1024.0 * 1024))).lower()
+        answer = raw_input('Possible duplicates found (taking %s). Delete? [y(es)/n(o)] ' % \
+                           (MB(dupSize))).lower()
         cleanedSize = 0
         if answer in ('y', 'yes'):
             for dup, size in dups:
                 if deleteDriver(dup):
                     cleanedSize += size
-            print 'Was able to clean up %.2fM out of %.2fM expected' % \
-                    (cleanedSize / (1024.0 * 1024), dupSize / (1024.0 * 1024))
+            print 'Was able to clean up %s out of %s expected' % (MB(cleanedSize), MB(dupSize))
         else:
             print 'Cancelled by user'
 
