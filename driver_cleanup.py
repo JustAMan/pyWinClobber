@@ -34,6 +34,7 @@ import os
 import glob
 import collections
 import datetime
+import sys
 
 class PnpUtilOutputError(Exception):
     pass
@@ -92,7 +93,17 @@ def getAllDrivers():
     Queries pnputil about all known staged OEM drivers in the system.
     Returns a dictionary that maps oem###.inf file name to DriverInfo() object.
     '''
-    output = subprocess.check_output(['pnputil', '-e']).splitlines()
+    try:
+        output = subprocess.check_output(['pnputil', '-e']).splitlines()
+    except WindowsError:
+        sys.stderr.write('pnputil.exe not found, are you running cleanup of right bitness for '
+                         'your system? You need to run 64-bit app on 64-bit system')
+        sys.exit(1)
+    except subprocess.CalledProcessError, err:
+        sys.stderr.write('Error calling pnputil.exe: rc = %s, output: %s' % \
+                         (err.returncode, err.output))
+        sys.exit(1)
+    
     if output[0].strip() != 'Microsoft PnP Utility':
         raise PnpUtilOutputError('Unexpected pnputil.exe output start: %s' % output[0])
     drivers, lastDriver = [], None
@@ -148,7 +159,7 @@ def main():
     print 'done'
     
     # Let's find possible duplicates. The tuple of driver class (e.g. Keyboard, Display, etc.),
-    # driver provider (Microsoft, Nvidia, etc.) and signed information (MS Compatibility, etc.)
+    # driver provider (Microsoft, nVidia, etc.) and signed information (MS Compatibility, etc.)
     # is considered to be the key defining a driver for the device. All drivers that have this
     # key being the same are considered to be the instances of the same driver, thus we sort
     # them by version and date and mark all older ones as duplicates of the most recent driver.
@@ -206,7 +217,7 @@ def main():
         try:
             oemName = oemFiles[content]
         except KeyError:
-            # this infName is not oem, skipping
+            # this infName is not OEM, skipping
             continue
         driverSize.append((oemName, getFolderSize(os.path.join(driverRepo, driverDir))))
     print 'done'
@@ -219,11 +230,11 @@ def main():
             dups.append((oemName, size))
             dupSize += size
         print '%s: %s%s' % (drivers[oemName], MB(size),
-                ' (duplicate of %s)' % oemDups[oemName] if oemName in oemDups else '')
+                ' (probably superseded by %s)' % oemDups[oemName] if oemName in oemDups else '')
 
     if dups:
-        answer = raw_input('Possible duplicates found (taking %s). Delete? [y(es)/n(o)] ' % \
-                           (MB(dupSize))).lower()
+        answer = raw_input(('Possible obsolete drivers found (taking %s). Try to delete? ' + \
+                           '[y(es)/n(o)] ') % (MB(dupSize))).lower()
         cleanedSize = 0
         if answer in ('y', 'yes'):
             for dup, size in dups:
