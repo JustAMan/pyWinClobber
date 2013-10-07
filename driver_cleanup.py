@@ -43,12 +43,7 @@ class DriverInfo(object):
     '''
     Object that holds information about OEM driver as provided by pnputil.exe -e
     '''
-    PARAMS_ORDER = [('name', 'Published name'),
-                    ('provider', 'Driver package provider'),
-                    ('driverClass', 'Class'),
-                    ('driverDateAndVersion', 'Driver date and version'),
-                    ('signedBy', 'Signer name'),
-                    (None, '')]
+    PARAMS_ORDER = ('name', 'provider', 'driverClass', 'driverDateAndVersion', 'signedBy', None)
     def __init__(self):
         self.name = ''
         self.provider = ''
@@ -56,26 +51,24 @@ class DriverInfo(object):
         self.driverDateAndVersion = ''
         self.signedBy = ''
         self.driverDate = None
+        self.rawDriverDate = None
         self.driverVersion = ()
         self.__nextParam = 0
 
     def parseLine(self, line):
         try:
-            paramName, paramText = self.PARAMS_ORDER[self.__nextParam]
+            paramName = self.PARAMS_ORDER[self.__nextParam]
             if not paramName:
                 raise Exception()
-            setattr(self, paramName,
-                    re.search(r'^{0}\s*:\s*([^\s\n]?.*)$'.format(re.escape(paramText)),
-                              line).group(1)
-                    )
+            setattr(self, paramName, re.search(r'^[^:]*:\s*([^\s\n]?.*)$', line).group(1))
         except:
             raise PnpUtilOutputError(('Bad driver parameters order in line: %s\n' + \
                                       'Tried reading the driver %s') % (line, self))
         else:
             self.__nextParam += 1
         if self.driverDateAndVersion:
-            date, version = self.driverDateAndVersion.split()
-            self.driverDate = datetime.datetime.strptime(date, '%m/%d/%Y')
+            date, version = self.driverDateAndVersion.split(None, 1)
+            self.rawDriverDate = date
             self.driverVersion = tuple(int(x) for x in re.findall(r'(\d+)', version))
 
     def __repr__(self):
@@ -84,9 +77,39 @@ class DriverInfo(object):
                  self.signedBy)
 
     def __str__(self):
-        date, version = self.driverDateAndVersion.split()
+        if self.driverDate and self.driverVersion:
+            date, version = self.driverDate, self.driverVersion
+        elif self.driverDateAndVersion:
+            date, version = self.driverDateAndVersion.split(None, 1)
+        else:
+            date, version = '', ''
         return '"%s" by "%s" v%s at %s [%s]' % (self.driverClass, self.provider, version, date,
                                                 self.name)
+
+def executePnputil(params):
+    '''
+    Executes pnputil.exe with given parameters in unicode console, decodes the result in
+    Unicode string
+    '''
+    output = subprocess.check_output(['pnputil'] + params)
+    result = []
+    brokenLine = False
+    # disabling pylint check as it's a false positive
+    for line in output.splitlines(): #pylint: disable=E1103
+        line = line.strip()
+        if not line:
+            brokenLine = False
+            result.append('')
+            continue
+        if brokenLine and result:
+            result[-1] = result[-1] + line
+            brokenLine = False
+            continue
+        if re.search(r'^[^:]*:\s*$', line):
+            # this is broken line, we need to join it with next one
+            brokenLine = True
+        result.append(line)
+    return result
 
 def getAllDrivers():
     '''
@@ -94,21 +117,21 @@ def getAllDrivers():
     Returns a dictionary that maps oem###.inf file name to DriverInfo() object.
     '''
     try:
-        output = subprocess.check_output(['pnputil', '-e']).splitlines()
+        output = executePnputil(['-e'])
     except WindowsError:
         sys.stderr.write('pnputil.exe not found, are you running cleanup of right bitness for '
                          'your system? You need to run 64-bit app on 64-bit system')
         sys.exit(1)
     except subprocess.CalledProcessError, err:
-        sys.stderr.write('Error calling pnputil.exe: rc = %s, output: %s' % \
+        sys.stderr.write(u'Error calling pnputil.exe: rc = %s, output: %s' % \
                          (err.returncode, err.output))
         sys.exit(1)
     
-    if output[0].strip() != 'Microsoft PnP Utility':
+    if ' pnp ' not in output[0].lower():
         raise PnpUtilOutputError('Unexpected pnputil.exe output start: %s' % output[0])
     drivers, lastDriver = [], None
     for line in output[1:] + ['']:
-        if not line.strip():
+        if not line:
             if lastDriver:
                 drivers.append(lastDriver)
                 lastDriver = None
@@ -116,6 +139,22 @@ def getAllDrivers():
         if not lastDriver:
             lastDriver = DriverInfo()
         lastDriver.parseLine(line)
+
+    # now try to guess correct day/month order
+    for dateTemplate in ('%d/%m/%Y', '%m/%d/%Y'):
+        for driver in drivers:
+            try:
+                driver.driverDate = datetime.datetime.strptime(driver.rawDriverDate,
+                                                               dateTemplate)
+            except ValueError:
+                break
+        else:
+            # we didn't encounter any errors while converting data, so we assume that
+            # this dateTemplate is the right one, so we stop searching for correct date template
+            break
+    else:
+        # we didn't find suitable date template, notify the user
+        raise PnpUtilOutputError('Cannot find suitable date format')
     return {driver.name: driver for driver in drivers}
 
 def deleteDriver(name):
@@ -125,13 +164,13 @@ def deleteDriver(name):
     '''
     print 'Deleting %s...' % name,
     try:
-        subprocess.check_output(['pnputil', '-d', name])
+        executePnputil(['-d', name])
     except subprocess.CalledProcessError, err:
-        if 'One or more devices are presently installed using the specified INF' in err.output:
+        if err.returncode == -536870339:
+            # constant retrieved by testing on my machine
             print 'fail: staged driver probably in use'
         else:
-            print 'fail: unexpected pnputil return code = %s, output:' % err.returncode
-            print err.output
+            print 'fail: unexpected pnputil return code = %s' % err.returncode
         return False
     else:
         print 'done'
