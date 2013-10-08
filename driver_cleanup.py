@@ -224,18 +224,23 @@ def main():
     infFiles = os.path.join(os.getenv('SystemRoot'), 'inf', 'oem*.inf')
     oemFiles = {}
     for infName in glob.glob(infFiles):
-        with open(infName, 'rb') as f:
-            content = f.read()
+        try:
+            with open(infName, 'rb') as f:
+                content = f.read()
+        except IOError, err:
+            print 'Warning! Cannot read "%s" file: %s' % (infName, err)
+            continue
         infName = os.path.basename(infName)
         try:
-            dupFile = oemFiles[content]
+            oemFiles[content]
         except KeyError:
             oemFiles[content] = infName
         else:
-            # There're two exact copies of .inf file with different names, that's really
-            # strange. Our guess here is that something is wrong with Windows installation,
-            # so we stop our execution
-            raise Exception('%s is duplicate of %s' % (infName, dupFile))
+            # There're two or more exact copies of .inf file with different names, that's really
+            # strange. My guess here was that something is wrong with Windows installation,
+            # so I used to stop script execution, but for now I've decided to ignore such
+            # drivers completely
+            continue
     print 'done'
     
     # now parse %SystemRoot%\system32\DriverStore\FileRepository
