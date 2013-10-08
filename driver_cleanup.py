@@ -128,7 +128,7 @@ def getAllDrivers():
                          (err.returncode, err.output))
         sys.exit(1)
     
-    if ' pnp ' not in output[0].lower():
+    if not (' pnp ' in output[0].lower() or 'PnP' in output[0]):
         raise PnpUtilOutputError('Unexpected pnputil.exe output start: %s' % output[0])
     drivers, lastDriver = [], None
     for line in output[1:] + ['']:
