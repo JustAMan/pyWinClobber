@@ -55,7 +55,11 @@ def unsquishGuid(guid):
 def orphanCleanup(name, ext, enumerator):
     files = set()
     for info in enumerator():
-        files.add(info.LocalPackage.lower())
+        try:
+            files.add(info.LocalPackage.lower())
+        except AttributeError:
+            print 'Warning! %s has no LocalPackage attribute, ignoring its info' % info
+
     orphanFiles, orphanSize = [], 0
     for fn in getCachedMsiFiles(ext):
         if fn not in files:
