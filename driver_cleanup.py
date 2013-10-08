@@ -35,6 +35,7 @@ import glob
 import collections
 import datetime
 import sys
+import errno
 
 class PnpUtilOutputError(Exception):
     pass
@@ -251,8 +252,14 @@ def main():
         except ValueError:
             # this folder does not match desired pattern, ignore it
             continue
-        with open(os.path.join(driverRepo, driverDir, infName), 'rb') as f:
-            content = f.read()
+        try:
+            with open(os.path.join(driverRepo, driverDir, infName), 'rb') as f:
+                content = f.read()
+        except IOError, err:
+            if err.errno != errno.ENOENT:
+                raise
+            # file is missing, skip it
+            continue
         try:
             oemName = oemFiles[content]
         except KeyError:
