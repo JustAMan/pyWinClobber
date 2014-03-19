@@ -30,6 +30,7 @@ from win32elevate import elevateAdminRights
 from common_helpers import MB
 import os
 import glob
+import errno
 
 def getCachedMsiFiles(ext):
     '''
@@ -72,8 +73,17 @@ def orphanCleanup(name, ext, enumerator):
             for orphan in orphanFiles:
                 try:
                     os.remove(orphan)
-                except Exception, e:
-                    print 'Cannot remove "%s": %r' % (orphan, e)
+                except OSError as ex:
+                    if ex.errno == errno.EACCES:
+                        reason = 'access denied'
+                    else:
+                        reason = '%s <%r>' % (ex, ex)
+                except BaseException as ex:
+                    reason = '%s <%r>' % (ex, ex)
+                else:
+                    reason = ''
+                if reason:
+                    print 'Cannot remove "%s": %s' % (orphan, reason)
         else:
             print 'Cancelled by user'
     else:

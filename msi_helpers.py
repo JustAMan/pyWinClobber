@@ -25,7 +25,6 @@ using MSI API
 import ctypes
 from ctypes.wintypes import DWORD
 from ctypes import c_char_p, POINTER, c_uint, pointer
-from win32elevate import elevateAdminRights
 
 LPDWORD = POINTER(DWORD)
 
@@ -153,5 +152,5 @@ def getAllProducts():
         yield MsiProduct(productGuid.value)
 
 if __name__ == '__main__':
-    sys.stderr.write('This is helper module not intended for standalone run\n')
-    sys.exit(1)
+    import sys
+    sys.exit('This is helper module not intended for standalone run\n')
