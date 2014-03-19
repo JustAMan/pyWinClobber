@@ -127,7 +127,7 @@ def getAllDrivers():
         sys.stderr.write(u'Error calling pnputil.exe: rc = %s, output: %s' % \
                          (err.returncode, err.output))
         sys.exit(1)
-    
+
     if not (' pnp ' in output[0].lower() or 'PnP' in output[0]):
         raise PnpUtilOutputError('Unexpected pnputil.exe output start: %s' % output[0])
     drivers, lastDriver = [], None
@@ -144,11 +144,15 @@ def getAllDrivers():
     # now try to guess correct day/month order
     for dateTemplate in ('%d/%m/%Y', '%m/%d/%Y'):
         for driver in drivers:
-            try:
-                driver.driverDate = datetime.datetime.strptime(driver.rawDriverDate,
-                                                               dateTemplate)
-            except ValueError:
-                break
+            if not re.search(r'\d+/\d+/\d+', driver.rawDriverDate):
+                # this is not a date at all...
+                driver.driverDate = driver.rawDriverDate
+            else:
+                try:
+                    driver.driverDate = datetime.datetime.strptime(driver.rawDriverDate,
+                                                                   dateTemplate)
+                except ValueError:
+                    break
         else:
             # we didn't encounter any errors while converting data, so we assume that
             # this dateTemplate is the right one, so we stop searching for correct date template
@@ -197,7 +201,7 @@ def main():
     print 'Reading all OEM drivers...',
     drivers = getAllDrivers()
     print 'done'
-    
+
     # Let's find possible duplicates. The tuple of driver class (e.g. Keyboard, Display, etc.),
     # driver provider (Microsoft, nVidia, etc.) and signed information (MS Compatibility, etc.)
     # is considered to be the key defining a driver for the device. All drivers that have this
@@ -242,7 +246,7 @@ def main():
             # drivers completely
             continue
     print 'done'
-    
+
     # now parse %SystemRoot%\system32\DriverStore\FileRepository
     print 'Parsing DriverStore...',
     driverRepo = os.path.join(os.getenv('SystemRoot'), 'system32', 'DriverStore',
@@ -272,7 +276,7 @@ def main():
             continue
         driverSize.append((oemName, getFolderSize(os.path.join(driverRepo, driverDir))))
     print 'done'
-    
+
     print 'Drivers (sorted by size):'
     driverSize.sort(reverse=True, key=lambda (oemName, size): size)
     dups, dupSize = [], 0
