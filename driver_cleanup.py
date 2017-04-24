@@ -68,7 +68,10 @@ class DriverInfo(object):
         else:
             self.__nextParam += 1
         if self.driverDateAndVersion:
-            date, version = self.driverDateAndVersion.split(None, 1)
+            try:
+                date, version = self.driverDateAndVersion.split(None, 1)
+            except ValueError:
+                date, version = self.driverDateAndVersion, '1'
             self.rawDriverDate = date
             self.driverVersion = tuple(int(x) for x in re.findall(r'(\d+)', version))
 
